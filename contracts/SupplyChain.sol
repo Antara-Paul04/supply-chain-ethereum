@@ -2,43 +2,43 @@
 pragma solidity ^0.8.20;
 
 contract SupplyChain {
-    // Define stages in the supply chain
-    enum State { Created, Shipped, Delivered }
-
-    struct Item {
+    struct Product {
         uint id;
         string name;
-        State state;
         address owner;
+        uint timestamp;
     }
 
-    mapping(uint => Item) public items;
+    mapping(uint => Product) public products;
     uint public nextId;
 
-    event ItemCreated(uint id, string name, address owner);
-    event ItemShipped(uint id, address owner);
-    event ItemDelivered(uint id, address owner);
+    event ProductAdded(uint id, string name, address owner);
+    event OwnershipTransferred(uint id, address oldOwner, address newOwner);
 
-    // Create a new item
-    function createItem(string memory _name) public {
-        items[nextId] = Item(nextId, _name, State.Created, msg.sender);
-        emit ItemCreated(nextId, _name, msg.sender);
+    // Add a new product
+    function addProduct(string memory _name) public {
+        products[nextId] = Product(nextId, _name, msg.sender, block.timestamp);
+        emit ProductAdded(nextId, _name, msg.sender);
         nextId++;
     }
 
-    // Mark an item as shipped
-    function shipItem(uint _id) public {
-        require(items[_id].owner == msg.sender, "Not item owner");
-        require(items[_id].state == State.Created, "Wrong state");
-        items[_id].state = State.Shipped;
-        emit ItemShipped(_id, msg.sender);
+    // Transfer ownership of a product
+    function transferOwnership(uint _id, address _newOwner) public {
+        require(products[_id].owner == msg.sender, "Not product owner");
+        address oldOwner = products[_id].owner;
+        products[_id].owner = _newOwner;
+
+        emit OwnershipTransferred(_id, oldOwner, _newOwner);
     }
 
-    // Mark an item as delivered
-    function deliverItem(uint _id) public {
-        require(items[_id].owner == msg.sender, "Not item owner");
-        require(items[_id].state == State.Shipped, "Wrong state");
-        items[_id].state = State.Delivered;
-        emit ItemDelivered(_id, msg.sender);
+    // Get product details
+    function getProduct(uint _id) public view returns (
+        uint id,
+        string memory name,
+        address owner,
+        uint timestamp
+    ) {
+        Product memory p = products[_id];
+        return (p.id, p.name, p.owner, p.timestamp);
     }
 }
