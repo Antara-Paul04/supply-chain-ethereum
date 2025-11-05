@@ -1,7 +1,57 @@
-# Supply Chain Ethereum Project
+# CoffeeChain - Enhanced Supply Chain Project
 
-## Project Overview
-This is a Hardhat 3 Beta blockchain project implementing a supply chain tracking system on Ethereum. The project consists of smart contracts for product tracking and a React frontend for user interaction.
+## Project Vision
+A UX-focused blockchain application that tracks coffee from farm to cup, designed for real-world stakeholders who aren't Web3-native. Built as a comprehensive semester project demonstrating practical blockchain implementation with seamless user experience.
+
+## Enhanced MVP Design
+
+### Target Users & Pain Points
+
+#### 1. Coffee Farmers (Primary Users)
+- **Current Pain**: Hard to prove fair trade compliance, delayed payments, no recognition for quality
+- **Our Solution**: Simple mobile interface to log harvest batches, get payments when coffee sells
+- **Auth**: Email/SMS login → auto-created wallet (no crypto knowledge needed)
+
+#### 2. Coffee Roasters (Business Users)  
+- **Current Pain**: Can't verify bean authenticity, hard to tell origin story to customers
+- **Our Solution**: Dashboard to receive batches, add roasting data, generate QR codes for packages
+- **Auth**: Email login → company dashboard with bulk operations
+
+#### 3. Coffee Consumers (End Users)
+- **Current Pain**: Don't know if "fair trade" claims are real, want coffee origin story
+- **Our Solution**: Scan QR code → beautiful story page with farm photos, farmer info, journey map
+- **Auth**: No login needed - just scan and view
+
+### Simple Supply Chain Flow
+```
+Farmer → Creates batch → Roaster → Receives & roasts → Consumer → Scans QR code
+  ↓          ↓              ↓           ↓               ↓          ↓
+Email     Harvest        Email      Roast data      QR scan   Story page
+login     details        login      & packaging      only      (no auth)
+```
+
+### Core Features (MVP)
+1. **Batch Creation**: Farmer logs harvest with basic details (farm, variety, date, kg)
+2. **State Transitions**: Harvested → Shipped → Received → Roasted → Packaged
+3. **QR Code Generation**: Each packaged batch gets unique QR code
+4. **Consumer Verification**: Scan QR → see complete journey + farmer story
+5. **Clean UI**: Modern, mobile-first design that looks professional
+
+### Tech Stack (Simplified)
+- **Smart Contract**: Enhanced coffee batch tracking with 4 simple states
+- **Frontend**: Next.js + RainbowKit + TailwindCSS + shadcn/ui components
+- **Auth**: RainbowKit for stakeholders (hides crypto complexity)
+- **Database**: Store non-critical data (photos, descriptions) off-chain for better UX
+- **QR Codes**: Generated client-side, links to verification page
+
+### Value Proposition
+- **For Farmers**: Recognition & fair payments
+- **For Roasters**: Brand authenticity & customer trust
+- **For Consumers**: Know your coffee's real story
+- **For Professor**: Real blockchain application with excellent UX
+
+## Original Project Overview
+This started as a basic Hardhat 3 Beta blockchain project implementing a supply chain tracking system on Ethereum. We've enhanced it into a coffee-focused application with real-world stakeholders and UX considerations.
 
 ## Architecture
 - **Smart Contracts**: Solidity contracts for supply chain management
