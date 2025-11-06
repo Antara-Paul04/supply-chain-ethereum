@@ -246,13 +246,13 @@ export default function FarmerDashboard() {
             </div>
 
             {/* Debug Info */}
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
+            {/* <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
               <p><strong>Debug Info:</strong></p>
               <p>Total batches in contract: {nextBatchId || 0}</p>
               <p>Your address: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
               <p>Filtered batches for you: {farmerBatches.length}</p>
               <p>Loading: {batchesLoading ? 'Yes' : 'No'}</p>
-            </div>
+            </div> */}
 
             {batchesLoading ? (
               <div className="text-center py-12">

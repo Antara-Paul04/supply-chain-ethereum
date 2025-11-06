@@ -67,15 +67,15 @@ export default function RoasterDashboard() {
       setQrCodeData(qrData);
 
       // Call smart contract packageBatch function
-      const txHash = await writeAsync('packageBatch', [selectedBatch, qrData]) as string;
+      // const txHash = await writeAsync('packageBatch', [selectedBatch, qrData]) as string;
 
-      // Show success with transaction link
-      const txUrl = getTransactionUrl(chainId, txHash);
-      if (txUrl) {
-        alert(`Batch packaged successfully with QR code!\n\nView transaction:\n${txUrl}`);
-      } else {
-        alert('Batch packaged successfully with QR code!');
-      }
+      // // Show success with transaction link
+      // const txUrl = getTransactionUrl(chainId, txHash);
+      // if (txUrl) {
+      //   alert(`Batch packaged successfully with QR code!\n\nView transaction:\n${txUrl}`);
+      // } else {
+      //   alert('Batch packaged successfully with QR code!');
+      // }
     } catch (err) {
       console.error('Error packaging batch:', err);
       alert('Failed to package batch. Please try again.');
