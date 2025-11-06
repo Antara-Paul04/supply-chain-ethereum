@@ -154,44 +154,25 @@ export function useGetFarmerBatches(farmerAddress: string | undefined) {
           return null;
         }
 
-        const batchArray = result.result as readonly [bigint, string, string, string, bigint, bigint, string, number, string, bigint, string, string, boolean];
+        // const batchArray = result.result as readonly [bigint, string, string, string, bigint, bigint, string, number, string, bigint, string, string, boolean];
         console.log(`Batch ${index} data:`, {
-          id: Number(batchArray[0]),
-          farmName: batchArray[1],
-          farmer: batchArray[6],
-          exists: batchArray[12],
-          rawData: batchArray
+          rawData: result.result,
         });
 
         // Check if batch exists before processing dates
-        if (!batchArray[12]) {
-          console.log(`Batch ${index} does not exist (exists=false)`);
-          return null;
-        }
+        // if (!batchArray.exists) {
+        //   console.log(`Batch ${index} does not exist (exists=false)`);
+        //   return null;
+        // }
 
-        const harvestTimestamp = Number(batchArray[5]);
-        const roastTimestamp = Number(batchArray[9]);
-
-        return {
-          id: index,
-          farmName: batchArray[1],
-          farmLocation: batchArray[2],
-          coffeeVariety: batchArray[3],
-          quantity: Number(batchArray[4]),
-          harvestDate: harvestTimestamp > 0 ? new Date(harvestTimestamp * 1000).toISOString().split('T')[0] : '',
-          farmer: batchArray[6],
-          state: BatchStateNames[batchArray[7] as keyof typeof BatchStateNames],
-          roasterName: batchArray[8],
-          roastDate: roastTimestamp > 0 ? new Date(roastTimestamp * 1000).toISOString().split('T')[0] : '',
-          roastProfile: batchArray[10],
-          qrCode: batchArray[11],
-          exists: batchArray[12]
-        };
-      })
-      .filter((batch): batch is NonNullable<typeof batch> => batch !== null && batch.exists);
+        const harvestTimestamp = Number(result,result[5]);
+        const roastTimestamp = Number(result.result[9]);
+        return result.result;
+      });
 
     // Debug logging
-    console.log('All existing batches:', allBatches.map(b => ({ id: b.id, farmer: b.farmer, farmName: b.farmName })));
+    console.log('Processed all batches:', allBatches);
+    console.log('All existing batches:', allBatches.map(b => ({ farmer: b.farmer, farmName: b.farmName })));
     console.log('Looking for farmer address:', farmerAddress);
     console.log('Filtered result:', allBatches.filter(b => b.farmer.toLowerCase() === farmerAddress.toLowerCase()));
 
@@ -209,11 +190,11 @@ export function useGetFarmerBatches(farmerAddress: string | undefined) {
 // Hook to filter batches by state
 export function useGetBatchesByState(state: string) {
   const { data: nextBatchId, isLoading: countLoading } = useGetNextBatchId();
-
+  
   // Create array of contract calls for all batches
   const contracts = useMemo(() => {
     if (!nextBatchId || nextBatchId === 0) return [];
-
+    
     return Array.from({ length: nextBatchId }, (_, i) => ({
       address: CONTRACT_CONFIG.address,
       abi: CONTRACT_CONFIG.abi,
@@ -221,7 +202,7 @@ export function useGetBatchesByState(state: string) {
       args: [i],
     }));
   }, [nextBatchId]);
-
+  
   const { data: batchesData, isLoading: batchesLoading, error, refetch } = useReadContracts({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     contracts: contracts as any,
@@ -229,37 +210,52 @@ export function useGetBatchesByState(state: string) {
       enabled: contracts.length > 0,
     },
   });
-
+  
   // Process and filter batches
   const batches = useMemo(() => {
-    if (!batchesData || !state) return [];
+    if (!batchesData) return [];
+    console.log('Raw batchesData from contract:', batchesData);
 
     return batchesData
       .map((result, index) => {
         if (result.status !== 'success' || !result.result) return null;
 
-        const batchArray = result.result as readonly [bigint, string, string, string, bigint, bigint, string, number, string, bigint, string, string, boolean];
+        const batch = result.result as {
+          id: bigint;
+          farmName: string;
+          farmLocation: string;
+          coffeeVariety: string;
+          quantity: bigint;
+          harvestDate: bigint;
+          farmer: string;
+          state: number;
+          roasterName: string;
+          roastDate: bigint;
+          roastProfile: string;
+          qrCode: string;
+          exists: boolean;
+        };
 
-        // Check if batch exists before processing dates
-        if (!batchArray[12]) return null;
+        // Check if batch exists and matches state
+        // if (!batch.exists || batch.state !== state) return null;
 
-        const harvestTimestamp = Number(batchArray[5]);
-        const roastTimestamp = Number(batchArray[9]);
-
+        const harvestTimestamp = Number(batch.harvestDate);
+        const roastTimestamp = Number(batch.roastDate);
+        
         return {
-          id: index,
-          farmName: batchArray[1],
-          farmLocation: batchArray[2],
-          coffeeVariety: batchArray[3],
-          quantity: Number(batchArray[4]),
+          id: Number(batch.id),
+          farmName: batch.farmName,
+          farmLocation: batch.farmLocation,
+          coffeeVariety: batch.coffeeVariety,
+          quantity: Number(batch.quantity),
           harvestDate: harvestTimestamp > 0 ? new Date(harvestTimestamp * 1000).toISOString().split('T')[0] : '',
-          farmer: batchArray[6],
-          state: BatchStateNames[batchArray[7] as keyof typeof BatchStateNames],
-          roasterName: batchArray[8],
+          farmer: batch.farmer,
+          state: BatchStateNames[batch.state as keyof typeof BatchStateNames],
+          roasterName: batch.roasterName,
           roastDate: roastTimestamp > 0 ? new Date(roastTimestamp * 1000).toISOString().split('T')[0] : '',
-          roastProfile: batchArray[10],
-          qrCode: batchArray[11],
-          exists: batchArray[12]
+          roastProfile: batch.roastProfile,
+          qrCode: batch.qrCode,
+          exists: batch.exists
         };
       })
       .filter((batch): batch is NonNullable<typeof batch> =>

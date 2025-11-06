@@ -20,6 +20,7 @@ export default function RoasterDashboard() {
     roastProfile: ''
   });
   const [qrCodeData, setQrCodeData] = useState<string>('');
+  console.log('RoasterDashboard render:', { shippedBatches });
 
   // Refetch batches when transaction succeeds
   useEffect(() => {

@@ -307,7 +307,7 @@ export default function FarmerDashboard() {
                         </div>
                       )}
                     </div>
-                    {batch.state === 'Harvested' && (
+                    {(
                       <button
                         onClick={() => handleShipBatch(batch.id)}
                         disabled={isPending || isConfirming}
