@@ -33,10 +33,12 @@ export default function VerifyPage() {
   const handleQRScan = (result: string) => {
     setShowScanner(false);
     
+    
     // Extract batch ID from QR code data
     if (result.startsWith('coffeechain://batch/')) {
       const extractedBatchId = result.replace('coffeechain://batch/', '');
       setBatchId(extractedBatchId);
+      console.log('Scanned Batch ID:', extractedBatchId);
       
       // Auto-verify the scanned batch
       const parsedBatchId = parseInt(extractedBatchId);

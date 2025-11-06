@@ -45,23 +45,40 @@ export function useGetBatch(batchId: number | undefined) {
   if (!data || error) return { data: null, error, isLoading };
   
   // Type assertion for contract return data
-  const batchArray = data as readonly [bigint, string, string, string, bigint, bigint, string, number, string, bigint, string, string, boolean];
-  
+  const batch = data as {
+    id: bigint;
+    farmName: string;
+    farmLocation: string;
+    coffeeVariety: string;
+    quantity: bigint;
+    harvestDate: bigint;
+    farmer: string;
+    state: number;
+    roasterName: string;
+    roastDate: bigint;
+    roastProfile: string;
+    qrCode: string;
+    exists: boolean;
+  };
+
+  const harvestTimestamp = Number(batch.harvestDate);
+  const roastTimestamp = Number(batch.roastDate);
+
   return {
     data: {
-      id: Number(batchArray[0]),
-      farmName: batchArray[1],
-      farmLocation: batchArray[2],
-      coffeeVariety: batchArray[3],
-      quantity: Number(batchArray[4]),
-      harvestDate: new Date(Number(batchArray[5]) * 1000).toISOString().split('T')[0],
-      farmer: batchArray[6],
-      state: BatchStateNames[batchArray[7] as keyof typeof BatchStateNames],
-      roasterName: batchArray[8],
-      roastDate: Number(batchArray[9]) > 0 ? new Date(Number(batchArray[9]) * 1000).toISOString().split('T')[0] : '',
-      roastProfile: batchArray[10],
-      qrCode: batchArray[11],
-      exists: batchArray[12]
+      id: Number(batch.id),
+      farmName: batch.farmName,
+      farmLocation: batch.farmLocation,
+      coffeeVariety: batch.coffeeVariety,
+      quantity: Number(batch.quantity),
+      harvestDate: harvestTimestamp > 0 ? new Date(harvestTimestamp * 1000).toISOString().split('T')[0] : '',
+      farmer: batch.farmer,
+      state: BatchStateNames[batch.state as keyof typeof BatchStateNames],
+      roasterName: batch.roasterName,
+      roastDate: roastTimestamp > 0 ? new Date(roastTimestamp * 1000).toISOString().split('T')[0] : '',
+      roastProfile: batch.roastProfile,
+      qrCode: batch.qrCode,
+      exists: batch.exists
     },
     error,
     isLoading
@@ -165,7 +182,7 @@ export function useGetFarmerBatches(farmerAddress: string | undefined) {
         //   return null;
         // }
 
-        const harvestTimestamp = Number(result,result[5]);
+        const harvestTimestamp = Number(result.result[5]);
         const roastTimestamp = Number(result.result[9]);
         return result.result;
       });
