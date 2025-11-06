@@ -93,3 +93,71 @@ export function useGetUser(address: string | undefined) {
 export function useContractAddress() {
   return CONTRACT_CONFIG.address;
 }
+
+// Hook to get next batch ID (total batches count)
+export function useGetNextBatchId() {
+  const { data, error, isLoading } = useContractRead('nextBatchId');
+  return {
+    data: data ? Number(data) : 0,
+    error,
+    isLoading
+  };
+}
+
+// Hook to get all batch IDs
+export function useGetAllBatchIds() {
+  const { data, error, isLoading } = useContractRead('getAllBatches');
+  return {
+    data: data ? (data as bigint[]).map(id => Number(id)) : [],
+    error,
+    isLoading
+  };
+}
+
+// Hook to get multiple batches by IDs
+export function useGetBatches(batchIds: number[]) {
+  // This will make multiple contract calls
+  const batches = batchIds.map(id => useGetBatch(id));
+
+  return {
+    data: batches
+      .filter(b => b.data && b.data.exists)
+      .map(b => b.data!),
+    isLoading: batches.some(b => b.isLoading),
+    error: batches.find(b => b.error)?.error
+  };
+}
+
+// Hook to filter batches by farmer address
+export function useGetFarmerBatches(farmerAddress: string | undefined) {
+  const { data: batchIds, isLoading: idsLoading } = useGetAllBatchIds();
+  const batches = useGetBatches(batchIds);
+
+  if (!farmerAddress) {
+    return { data: [], isLoading: false, error: null };
+  }
+
+  const filteredData = batches.data.filter(
+    batch => batch.farmer.toLowerCase() === farmerAddress.toLowerCase()
+  );
+
+  return {
+    data: filteredData,
+    isLoading: idsLoading || batches.isLoading,
+    error: batches.error
+  };
+}
+
+// Hook to filter batches by state
+export function useGetBatchesByState(state: string) {
+  const { data: batchIds, isLoading: idsLoading } = useGetAllBatchIds();
+  const batches = useGetBatches(batchIds);
+
+  const filteredData = batches.data.filter(batch => batch.state === state);
+
+  return {
+    data: filteredData,
+    isLoading: idsLoading || batches.isLoading,
+    error: batches.error
+  };
+}

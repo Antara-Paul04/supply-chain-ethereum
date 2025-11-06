@@ -1,0 +1,40 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-4da3d8c4ea725eabafa93fb011523d02cae9dd71",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/CoffeeBatch.sol": "project/contracts/CoffeeBatch.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": [],
+      "viaIR": true
+    },
+    "sources": {
+      "project/contracts/CoffeeBatch.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract CoffeeBatch {\n    enum BatchState {\n        Harvested,\n        Shipped,\n        Roasted,\n        Packaged\n    }\n\n    enum UserRole {\n        Farmer,\n        Roaster,\n        Admin\n    }\n\n    struct Batch {\n        uint256 id;\n        string farmName;\n        string farmLocation;\n        string coffeeVariety;\n        uint256 quantity; // in kg\n        uint256 harvestDate;\n        address farmer;\n        BatchState state;\n        string roasterName;\n        uint256 roastDate;\n        string roastProfile;\n        string qrCode;\n        bool exists;\n    }\n\n    struct User {\n        UserRole role;\n        string name;\n        string email;\n        string location;\n        bool isRegistered;\n    }\n\n    mapping(uint256 => Batch) public batches;\n    mapping(address => User) public users;\n    mapping(string => uint256) public qrCodeToBatch;\n    \n    uint256 public nextBatchId;\n    address public admin;\n\n    event BatchCreated(uint256 indexed batchId, address farmer, string farmName);\n    event BatchStateChanged(uint256 indexed batchId, BatchState newState, address updatedBy);\n    event UserRegistered(address user, UserRole role, string name);\n    event BatchRoasted(uint256 indexed batchId, string roasterName, string roastProfile);\n\n    modifier onlyRole(UserRole _role) {\n        require(users[msg.sender].isRegistered, \"User not registered\");\n        require(users[msg.sender].role == _role, \"Unauthorized role\");\n        _;\n    }\n\n    modifier onlyFarmerOrAdmin() {\n        require(\n            users[msg.sender].role == UserRole.Farmer || \n            users[msg.sender].role == UserRole.Admin, \n            \"Only farmer or admin\"\n        );\n        _;\n    }\n\n    modifier batchExists(uint256 _batchId) {\n        require(batches[_batchId].exists, \"Batch does not exist\");\n        _;\n    }\n\n    constructor() {\n        admin = msg.sender;\n        users[msg.sender] = User(UserRole.Admin, \"Admin\", \"\", \"\", true);\n    }\n\n    function registerUser(\n        address _user,\n        UserRole _role,\n        string memory _name,\n        string memory _email,\n        string memory _location\n    ) public {\n        require(\n            msg.sender == admin || msg.sender == _user,\n            \"Only admin or self can register\"\n        );\n        \n        users[_user] = User(_role, _name, _email, _location, true);\n        emit UserRegistered(_user, _role, _name);\n    }\n\n    function createBatch(\n        string memory _farmName,\n        string memory _farmLocation,\n        string memory _coffeeVariety,\n        uint256 _quantity\n    ) public onlyFarmerOrAdmin {\n        uint256 batchId = nextBatchId;\n        \n        batches[batchId] = Batch({\n            id: batchId,\n            farmName: _farmName,\n            farmLocation: _farmLocation,\n            coffeeVariety: _coffeeVariety,\n            quantity: _quantity,\n            harvestDate: block.timestamp,\n            farmer: msg.sender,\n            state: BatchState.Harvested,\n            roasterName: \"\",\n            roastDate: 0,\n            roastProfile: \"\",\n            qrCode: \"\",\n            exists: true\n        });\n\n        nextBatchId++;\n        emit BatchCreated(batchId, msg.sender, _farmName);\n    }\n\n    function shipBatch(uint256 _batchId) \n        public \n        onlyFarmerOrAdmin \n        batchExists(_batchId) \n    {\n        require(batches[_batchId].state == BatchState.Harvested, \"Invalid state transition\");\n        require(batches[_batchId].farmer == msg.sender || users[msg.sender].role == UserRole.Admin, \"Not batch owner\");\n        \n        batches[_batchId].state = BatchState.Shipped;\n        emit BatchStateChanged(_batchId, BatchState.Shipped, msg.sender);\n    }\n\n    function roastBatch(\n        uint256 _batchId,\n        string memory _roasterName,\n        string memory _roastProfile\n    ) public onlyRole(UserRole.Roaster) batchExists(_batchId) {\n        require(batches[_batchId].state == BatchState.Shipped, \"Invalid state transition\");\n        \n        batches[_batchId].state = BatchState.Roasted;\n        batches[_batchId].roasterName = _roasterName;\n        batches[_batchId].roastDate = block.timestamp;\n        batches[_batchId].roastProfile = _roastProfile;\n        \n        emit BatchStateChanged(_batchId, BatchState.Roasted, msg.sender);\n        emit BatchRoasted(_batchId, _roasterName, _roastProfile);\n    }\n\n    function packageBatch(uint256 _batchId, string memory _qrCode) \n        public \n        onlyRole(UserRole.Roaster) \n        batchExists(_batchId) \n    {\n        require(batches[_batchId].state == BatchState.Roasted, \"Invalid state transition\");\n        require(bytes(_qrCode).length > 0, \"QR code required\");\n        \n        batches[_batchId].state = BatchState.Packaged;\n        batches[_batchId].qrCode = _qrCode;\n        qrCodeToBatch[_qrCode] = _batchId;\n        \n        emit BatchStateChanged(_batchId, BatchState.Packaged, msg.sender);\n    }\n\n    function getBatch(uint256 _batchId) \n        public \n        view \n        batchExists(_batchId) \n        returns (Batch memory) \n    {\n        return batches[_batchId];\n    }\n\n    function getBatchByQR(string memory _qrCode) \n        public \n        view \n        returns (Batch memory) \n    {\n        uint256 batchId = qrCodeToBatch[_qrCode];\n        require(batchId > 0 || (batchId == 0 && keccak256(bytes(batches[0].qrCode)) == keccak256(bytes(_qrCode))), \"Invalid QR code\");\n        require(batches[batchId].exists, \"Invalid QR code\");\n        return batches[batchId];\n    }\n\n    function getUserInfo(address _user) \n        public \n        view \n        returns (UserRole role, string memory name, string memory email, string memory location, bool isRegistered) \n    {\n        User memory user = users[_user];\n        return (user.role, user.name, user.email, user.location, user.isRegistered);\n    }\n\n    function getAllBatches() public view returns (uint256[] memory) {\n        uint256[] memory batchIds = new uint256[](nextBatchId);\n        for (uint256 i = 0; i < nextBatchId; i++) {\n            if (batches[i].exists) {\n                batchIds[i] = i;\n            }\n        }\n        return batchIds;\n    }\n}"
+      }
+    }
+  }
+}

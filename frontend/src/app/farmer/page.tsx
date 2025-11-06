@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useContractWrite } from '@/hooks/useContract';
+import { useContractWrite, useGetFarmerBatches } from '@/hooks/useContract';
+import { getTransactionUrl } from '@/utils/explorer';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 
 export default function FarmerDashboard() {
   const { user, logout, hasAccess } = useAuth();
   const { address } = useAccount();
-  const { writeAsync, isPending, isConfirming, isSuccess } = useContractWrite();
+  const chainId = useChainId();
+  const { writeAsync, isPending, isConfirming, isSuccess, hash } = useContractWrite();
+  const { data: farmerBatches, isLoading: batchesLoading } = useGetFarmerBatches(address);
   const [formData, setFormData] = useState({
     farmName: '',
     farmLocation: '',
@@ -30,38 +33,62 @@ export default function FarmerDashboard() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     console.log('Form submission:', { address, user, formData });
-    
+
     if (!address) {
       alert('Please connect your wallet first');
       return;
     }
 
     try {
-      console.log('Calling createBatch with:', [
-        formData.farmName,
-        formData.farmLocation,
-        formData.coffeeVariety,
-        parseInt(formData.quantity)
-      ]);
-      
       // Call smart contract createBatch function
-      const result = await writeAsync('createBatch', [
+      const txHash = await writeAsync('createBatch', [
         formData.farmName,
         formData.farmLocation,
         formData.coffeeVariety,
         parseInt(formData.quantity)
-      ]);
-      
-      console.log('Create batch result:', result);
-      
+      ]) as string;
+
       // Reset form on success
       setFormData({ farmName: user?.name || '', farmLocation: user?.location || '', coffeeVariety: '', quantity: '' });
-      alert('Coffee batch created successfully!');
+
+      // Show success with transaction link
+      const txUrl = getTransactionUrl(chainId, txHash as string);
+      if (txUrl) {
+        alert(`Coffee batch created successfully!\n\nView transaction:\n${txUrl}`);
+      } else {
+        alert('Coffee batch created successfully!');
+      }
     } catch (err) {
       console.error('Error creating batch:', err);
       alert('Failed to create batch. Please try again.');
+    }
+  };
+
+  const handleShipBatch = async (batchId: number) => {
+    if (!address) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    if (!confirm(`Ship batch #${batchId} to roaster?`)) {
+      return;
+    }
+
+    try {
+      const txHash = await writeAsync('shipBatch', [batchId]) as string;
+
+      // Show success with transaction link
+      const txUrl = getTransactionUrl(chainId, txHash);
+      if (txUrl) {
+        alert(`Batch shipped successfully!\n\nView transaction:\n${txUrl}`);
+      } else {
+        alert('Batch shipped successfully!');
+      }
+    } catch (err) {
+      console.error('Error shipping batch:', err);
+      alert('Failed to ship batch. Please try again.');
     }
   };
 
@@ -192,18 +219,77 @@ export default function FarmerDashboard() {
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-gray-900">Your Coffee Batches</h2>
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">0 batches</span>
+              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                {batchesLoading ? '...' : `${farmerBatches.length} batch${farmerBatches.length !== 1 ? 'es' : ''}`}
+              </span>
             </div>
-            
-            <div className="text-center py-12">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 2L13 14l-3-1-3 1z"/>
-                </svg>
+
+            {batchesLoading ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4 animate-pulse">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2L13 14l-3-1-3 1z"/>
+                  </svg>
+                </div>
+                <p className="text-gray-500 text-sm">Loading batches...</p>
               </div>
-              <p className="text-gray-500 text-sm">No batches created yet</p>
-              <p className="text-gray-400 text-xs mt-1">Create your first batch using the form on the left</p>
-            </div>
+            ) : farmerBatches.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2L13 14l-3-1-3 1z"/>
+                  </svg>
+                </div>
+                <p className="text-gray-500 text-sm">No batches created yet</p>
+                <p className="text-gray-400 text-xs mt-1">Create your first batch using the form on the left</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {farmerBatches.map((batch) => (
+                  <div key={batch.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-medium text-gray-900 text-sm">Batch #{batch.id}</h3>
+                        <p className="text-xs text-gray-500">{batch.coffeeVariety}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        batch.state === 'Harvested' ? 'bg-yellow-100 text-yellow-800' :
+                        batch.state === 'Shipped' ? 'bg-blue-100 text-blue-800' :
+                        batch.state === 'Roasted' ? 'bg-orange-100 text-orange-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {batch.state}
+                      </span>
+                    </div>
+                    <div className="space-y-1 text-xs text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Quantity:</span>
+                        <span className="font-medium">{batch.quantity} kg</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Harvest Date:</span>
+                        <span className="font-medium">{batch.harvestDate}</span>
+                      </div>
+                      {batch.roasterName && (
+                        <div className="flex justify-between">
+                          <span>Roaster:</span>
+                          <span className="font-medium">{batch.roasterName}</span>
+                        </div>
+                      )}
+                    </div>
+                    {batch.state === 'Harvested' && (
+                      <button
+                        onClick={() => handleShipBatch(batch.id)}
+                        disabled={isPending || isConfirming}
+                        className="mt-3 w-full bg-blue-600 text-white py-1.5 px-3 rounded text-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      >
+                        {isPending || isConfirming ? 'Processing...' : 'Ship to Roaster'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { magic } from '@/lib/magic';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect, useChainId } from 'wagmi';
 import { useContractWrite, useGetUser } from '@/hooks/useContract';
+import { getTransactionUrl } from '@/utils/explorer';
 
 type UserRole = 'farmer' | 'roaster' | 'admin';
 
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const { disconnect } = useDisconnect();
   const { writeAsync } = useContractWrite();
   const { data: contractUser, isLoading: userLoading } = useGetUser(address);
@@ -66,16 +68,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           location: location || ''
         });
         
-        const result = await writeAsync('registerUser', [
+        const txHash = await writeAsync('registerUser', [
           address, // user address
           role === 'farmer' ? 0 : role === 'roaster' ? 1 : 2, // UserRole enum
           name,
           emailOrAddress, // Store wallet address as identifier
           location || '' // location parameter
-        ]);
-        
-        console.log('Registration result:', result);
-        
+        ]) as string;
+
+        console.log('Registration transaction:', txHash);
+
+        // Show success with transaction link
+        const txUrl = getTransactionUrl(chainId, txHash);
+        if (txUrl) {
+          alert(`Registration successful!\n\nView transaction:\n${txUrl}`);
+        }
+
         setUser({
           address,
           role,
@@ -92,14 +100,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userAddress = userMetadata.publicAddress || '';
           
           // Register user with smart contract
-          await writeAsync('registerUser', [
+          const txHash = await writeAsync('registerUser', [
             userAddress, // user address from Magic Link
             role === 'farmer' ? 0 : role === 'roaster' ? 1 : 2, // UserRole enum
             name,
             emailOrAddress, // Store actual email for Magic Link users
             location || '' // location parameter
-          ]);
-          
+          ]) as string;
+
+          console.log('Registration transaction:', txHash);
+
+          // Show success with transaction link
+          const txUrl = getTransactionUrl(chainId, txHash);
+          if (txUrl) {
+            alert(`Registration successful!\n\nView transaction:\n${txUrl}`);
+          }
+
           setUser({
             email: emailOrAddress,
             address: userAddress,

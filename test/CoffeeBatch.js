@@ -20,7 +20,8 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
         farmer.address,
         0, // UserRole.Farmer
         "José Martinez",
-        "jose@sunrisefarm.gt"
+        "jose@sunrisefarm.gt",
+        "Huehuetenango, Guatemala"
       );
 
       const userInfo = await coffeeBatch.getUserInfo(farmer.address);
@@ -35,7 +36,8 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
         roaster.address,
         1, // UserRole.Roaster
         "Blue Mountain Roasters",
-        "ops@bluemountain.com"
+        "ops@bluemountain.com",
+        "Kingston, Jamaica"
       );
 
       const userInfo = await coffeeBatch.getUserInfo(roaster.address);
@@ -49,8 +51,9 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
       await coffeeBatch.registerUser(
         farmer.address,
         0,
-        "José Martinez", 
-        "jose@sunrisefarm.gt"
+        "José Martinez",
+        "jose@sunrisefarm.gt",
+        "Huehuetenango, Guatemala"
       );
     });
 
@@ -87,7 +90,7 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
 
     it("should prevent non-farmer from creating batches", async function () {
       // Register consumer as non-farmer role first
-      await coffeeBatch.registerUser(consumer.address, 1, "Consumer", "consumer@test.com"); // Roaster role
+      await coffeeBatch.registerUser(consumer.address, 1, "Consumer", "consumer@test.com", "Test Location"); // Roaster role
       
       await expect(
         coffeeBatch.connect(consumer).createBatch(
@@ -103,8 +106,8 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
   describe("Roaster Dashboard Flow", function () {
     beforeEach(async function () {
       // Register users
-      await coffeeBatch.registerUser(farmer.address, 0, "José Martinez", "jose@farm.gt");
-      await coffeeBatch.registerUser(roaster.address, 1, "Blue Mountain Roasters", "ops@bluemountain.com");
+      await coffeeBatch.registerUser(farmer.address, 0, "José Martinez", "jose@farm.gt", "Huehuetenango, Guatemala");
+      await coffeeBatch.registerUser(roaster.address, 1, "Blue Mountain Roasters", "ops@bluemountain.com", "Kingston, Jamaica");
       
       // Create and ship a batch
       await coffeeBatch.connect(farmer).createBatch(
@@ -166,8 +169,8 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
   describe("Consumer Verification Flow", function () {
     beforeEach(async function () {
       // Complete full supply chain flow
-      await coffeeBatch.registerUser(farmer.address, 0, "José Martinez", "jose@farm.gt");
-      await coffeeBatch.registerUser(roaster.address, 1, "Blue Mountain Roasters", "ops@bluemountain.com");
+      await coffeeBatch.registerUser(farmer.address, 0, "José Martinez", "jose@farm.gt", "Huehuetenango, Guatemala");
+      await coffeeBatch.registerUser(roaster.address, 1, "Blue Mountain Roasters", "ops@bluemountain.com", "Kingston, Jamaica");
       
       await coffeeBatch.connect(farmer).createBatch(
         "Sunrise Coffee Farm",
@@ -208,8 +211,8 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
 
   describe("Role-Based Access Control", function () {
     beforeEach(async function () {
-      await coffeeBatch.registerUser(farmer.address, 0, "José Martinez", "jose@farm.gt");
-      await coffeeBatch.registerUser(roaster.address, 1, "Blue Mountain Roasters", "ops@bluemountain.com");
+      await coffeeBatch.registerUser(farmer.address, 0, "José Martinez", "jose@farm.gt", "Huehuetenango, Guatemala");
+      await coffeeBatch.registerUser(roaster.address, 1, "Blue Mountain Roasters", "ops@bluemountain.com", "Kingston, Jamaica");
     });
 
     it("should enforce farmer-only batch creation", async function () {
@@ -240,8 +243,8 @@ describe("CoffeeBatch Contract - Complete UX Flow", function () {
   describe("Complete Supply Chain Journey", function () {
     it("should complete full coffee journey from farm to consumer", async function () {
       // 1. Register stakeholders (simulating email signup)
-      await coffeeBatch.registerUser(farmer.address, 0, "María González", "maria@fincaelparaiso.gt");
-      await coffeeBatch.registerUser(roaster.address, 1, "Artisan Coffee Co.", "hello@artisancoffee.com");
+      await coffeeBatch.registerUser(farmer.address, 0, "María González", "maria@fincaelparaiso.gt", "Antigua, Guatemala");
+      await coffeeBatch.registerUser(roaster.address, 1, "Artisan Coffee Co.", "hello@artisancoffee.com", "Seattle, USA");
 
       // 2. Farmer creates batch (from farmer dashboard)
       await coffeeBatch.connect(farmer).createBatch(

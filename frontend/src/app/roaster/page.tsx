@@ -2,15 +2,18 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useContractWrite } from '@/hooks/useContract';
+import { useContractWrite, useGetBatchesByState } from '@/hooks/useContract';
+import { getTransactionUrl } from '@/utils/explorer';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 
 export default function RoasterDashboard() {
   const { user, logout, hasAccess } = useAuth();
   const { address } = useAccount();
+  const chainId = useChainId();
   const { writeAsync, isPending, isConfirming, isSuccess } = useContractWrite();
+  const { data: shippedBatches, isLoading: batchesLoading } = useGetBatchesByState('Shipped');
   const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
   const [roastData, setRoastData] = useState({
     roasterName: '',
@@ -18,34 +21,26 @@ export default function RoasterDashboard() {
   });
   const [qrCodeData, setQrCodeData] = useState<string>('');
 
-  // Mock data for demonstration
-  const availableBatches = [
-    {
-      id: 0,
-      farmName: 'Sunrise Coffee Farm',
-      farmLocation: 'Huehuetenango, Guatemala',
-      coffeeVariety: 'Arabica - Bourbon',
-      quantity: 100,
-      state: 'Shipped'
-    }
-  ];
-
   const handleRoast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedBatch === null || !address) return;
     
     try {
       // Call smart contract roastBatch function
-      await writeAsync('roastBatch', [
+      const txHash = await writeAsync('roastBatch', [
         selectedBatch,
         roastData.roasterName,
         roastData.roastProfile
-      ]);
-      
-      if (isSuccess) {
+      ]) as string;
+
+      // Show success with transaction link
+      const txUrl = getTransactionUrl(chainId, txHash);
+      if (txUrl) {
+        alert(`Batch roasted successfully!\n\nView transaction:\n${txUrl}`);
+      } else {
         alert('Batch roasted successfully!');
-        setRoastData({ roasterName: '', roastProfile: '' });
       }
+      setRoastData({ roasterName: '', roastProfile: '' });
     } catch (err) {
       console.error('Error roasting batch:', err);
       alert('Failed to roast batch. Please try again.');
@@ -54,22 +49,75 @@ export default function RoasterDashboard() {
 
   const handlePackage = async () => {
     if (selectedBatch === null || !address) return;
-    
+
     try {
       // Generate QR code data
       const qrData = `coffeechain://batch/${selectedBatch}`;
       setQrCodeData(qrData);
-      
+
       // Call smart contract packageBatch function
-      await writeAsync('packageBatch', [selectedBatch, qrData]);
-      
-      if (isSuccess) {
+      const txHash = await writeAsync('packageBatch', [selectedBatch, qrData]) as string;
+
+      // Show success with transaction link
+      const txUrl = getTransactionUrl(chainId, txHash);
+      if (txUrl) {
+        alert(`Batch packaged successfully with QR code!\n\nView transaction:\n${txUrl}`);
+      } else {
         alert('Batch packaged successfully with QR code!');
       }
     } catch (err) {
       console.error('Error packaging batch:', err);
       alert('Failed to package batch. Please try again.');
     }
+  };
+
+  const handleDownloadQR = () => {
+    const svg = document.getElementById('qr-code-svg');
+    if (!svg) return;
+
+    // Create a canvas element
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size (with padding)
+    const padding = 40;
+    const size = 200;
+    canvas.width = size + padding * 2;
+    canvas.height = size + padding * 2;
+
+    // Fill white background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Convert SVG to image
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      // Draw image on canvas with padding
+      ctx.drawImage(img, padding, padding, size, size);
+
+      // Convert canvas to blob and download
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `coffeechain-batch-${selectedBatch}-qr.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      });
+
+      URL.revokeObjectURL(url);
+    };
+
+    img.src = url;
   };
 
   if (!user || !hasAccess('roaster')) {
@@ -132,29 +180,50 @@ export default function RoasterDashboard() {
               <h2 className="text-lg font-semibold text-gray-900">Available Batches</h2>
             </div>
 
-            <div className="space-y-3">
-              {availableBatches.map((batch) => (
-                <div 
-                  key={batch.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                    selectedBatch === batch.id 
-                      ? 'border-blue-500 bg-blue-50 shadow-sm' 
-                      : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                  }`}
-                  onClick={() => setSelectedBatch(batch.id)}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-gray-900 text-sm">Batch #{batch.id}</h3>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                      {batch.state}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">{batch.farmName}</p>
-                  <p className="text-xs text-gray-500">{batch.farmLocation}</p>
-                  <p className="text-xs text-gray-500">{batch.coffeeVariety} • {batch.quantity}kg</p>
+            {batchesLoading ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4 animate-pulse">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v1a1 1 0 110 2v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 110-2V4z"/>
+                  </svg>
                 </div>
-              ))}
-            </div>
+                <p className="text-gray-500 text-sm">Loading batches...</p>
+              </div>
+            ) : shippedBatches.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v1a1 1 0 110 2v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 110-2V4z"/>
+                  </svg>
+                </div>
+                <p className="text-gray-500 text-sm">No shipped batches available</p>
+                <p className="text-gray-400 text-xs mt-1">Waiting for farmers to ship coffee batches</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {shippedBatches.map((batch) => (
+                  <div
+                    key={batch.id}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      selectedBatch === batch.id
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                    }`}
+                    onClick={() => setSelectedBatch(batch.id)}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-medium text-gray-900 text-sm">Batch #{batch.id}</h3>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        {batch.state}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">{batch.farmName}</p>
+                    <p className="text-xs text-gray-500">{batch.farmLocation}</p>
+                    <p className="text-xs text-gray-500">{batch.coffeeVariety} • {batch.quantity}kg</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Roasting Interface */}
@@ -245,13 +314,16 @@ export default function RoasterDashboard() {
             {qrCodeData ? (
               <div className="text-center">
                 <div className="bg-white p-4 rounded-lg border border-gray-200 inline-block mb-4">
-                  <QRCode value={qrCodeData} size={160} />
+                  <QRCode id="qr-code-svg" value={qrCodeData} size={160} />
                 </div>
                 <p className="text-sm font-medium text-gray-900 mb-1">Ready for Packaging</p>
                 <p className="text-xs text-gray-500">
                   Print this QR code on your coffee packaging for consumer verification
                 </p>
-                <button className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium">
+                <button
+                  onClick={handleDownloadQR}
+                  className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
                   Download QR Code
                 </button>
               </div>
