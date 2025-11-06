@@ -1,5 +1,6 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { CONTRACT_CONFIG, UserRoleNames, BatchStateNames } from '@/utils/contract';
+import { useMemo } from 'react';
 
 // Custom hook for contract reads
 export function useContractRead(functionName: string, args?: readonly unknown[]) {
@@ -13,13 +14,13 @@ export function useContractRead(functionName: string, args?: readonly unknown[])
 
 // Custom hook for contract writes
 export function useContractWrite() {
-  const { writeContract, data: hash, error, isPending } = useWriteContract();
+  const { writeContractAsync, data: hash, error, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
   const writeAsync = async (functionName: string, args: readonly unknown[]) => {
-    return writeContract({
+    return await writeContractAsync({
       address: CONTRACT_CONFIG.address,
       abi: CONTRACT_CONFIG.abi,
       functionName,
@@ -114,50 +115,164 @@ export function useGetAllBatchIds() {
   };
 }
 
-// Hook to get multiple batches by IDs
-export function useGetBatches(batchIds: number[]) {
-  // This will make multiple contract calls
-  const batches = batchIds.map(id => useGetBatch(id));
-
-  return {
-    data: batches
-      .filter(b => b.data && b.data.exists)
-      .map(b => b.data!),
-    isLoading: batches.some(b => b.isLoading),
-    error: batches.find(b => b.error)?.error
-  };
-}
-
 // Hook to filter batches by farmer address
 export function useGetFarmerBatches(farmerAddress: string | undefined) {
-  const { data: batchIds, isLoading: idsLoading } = useGetAllBatchIds();
-  const batches = useGetBatches(batchIds);
+  const { data: nextBatchId, isLoading: countLoading } = useGetNextBatchId();
 
-  if (!farmerAddress) {
-    return { data: [], isLoading: false, error: null };
-  }
+  // Create array of contract calls for all batches
+  const contracts = useMemo(() => {
+    if (!nextBatchId || nextBatchId === 0) return [];
 
-  const filteredData = batches.data.filter(
-    batch => batch.farmer.toLowerCase() === farmerAddress.toLowerCase()
-  );
+    return Array.from({ length: nextBatchId }, (_, i) => ({
+      address: CONTRACT_CONFIG.address,
+      abi: CONTRACT_CONFIG.abi,
+      functionName: 'getBatch' as const,
+      args: [i],
+    }));
+  }, [nextBatchId]);
+
+  const { data: batchesData, isLoading: batchesLoading, error, refetch } = useReadContracts({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contracts: contracts as any,
+    query: {
+      enabled: contracts.length > 0,
+    },
+  });
+
+  // Process and filter batches
+  const batches = useMemo(() => {
+    if (!batchesData || !farmerAddress) return [];
+
+    console.log('Raw batchesData from contract:', batchesData);
+
+    const allBatches = batchesData
+      .map((result, index) => {
+        console.log(`Processing batch ${index}:`, result);
+
+        if (result.status !== 'success' || !result.result) {
+          console.log(`Batch ${index} failed or has no result`);
+          return null;
+        }
+
+        const batchArray = result.result as readonly [bigint, string, string, string, bigint, bigint, string, number, string, bigint, string, string, boolean];
+        console.log(`Batch ${index} data:`, {
+          id: Number(batchArray[0]),
+          farmName: batchArray[1],
+          farmer: batchArray[6],
+          exists: batchArray[12],
+          rawData: batchArray
+        });
+
+        // Check if batch exists before processing dates
+        if (!batchArray[12]) {
+          console.log(`Batch ${index} does not exist (exists=false)`);
+          return null;
+        }
+
+        const harvestTimestamp = Number(batchArray[5]);
+        const roastTimestamp = Number(batchArray[9]);
+
+        return {
+          id: index,
+          farmName: batchArray[1],
+          farmLocation: batchArray[2],
+          coffeeVariety: batchArray[3],
+          quantity: Number(batchArray[4]),
+          harvestDate: harvestTimestamp > 0 ? new Date(harvestTimestamp * 1000).toISOString().split('T')[0] : '',
+          farmer: batchArray[6],
+          state: BatchStateNames[batchArray[7] as keyof typeof BatchStateNames],
+          roasterName: batchArray[8],
+          roastDate: roastTimestamp > 0 ? new Date(roastTimestamp * 1000).toISOString().split('T')[0] : '',
+          roastProfile: batchArray[10],
+          qrCode: batchArray[11],
+          exists: batchArray[12]
+        };
+      })
+      .filter((batch): batch is NonNullable<typeof batch> => batch !== null && batch.exists);
+
+    // Debug logging
+    console.log('All existing batches:', allBatches.map(b => ({ id: b.id, farmer: b.farmer, farmName: b.farmName })));
+    console.log('Looking for farmer address:', farmerAddress);
+    console.log('Filtered result:', allBatches.filter(b => b.farmer.toLowerCase() === farmerAddress.toLowerCase()));
+
+    return allBatches.filter(b => b.farmer.toLowerCase() === farmerAddress.toLowerCase());
+  }, [batchesData, farmerAddress]);
 
   return {
-    data: filteredData,
-    isLoading: idsLoading || batches.isLoading,
-    error: batches.error
+    data: batches,
+    isLoading: countLoading || batchesLoading,
+    error,
+    refetch
   };
 }
 
 // Hook to filter batches by state
 export function useGetBatchesByState(state: string) {
-  const { data: batchIds, isLoading: idsLoading } = useGetAllBatchIds();
-  const batches = useGetBatches(batchIds);
+  const { data: nextBatchId, isLoading: countLoading } = useGetNextBatchId();
 
-  const filteredData = batches.data.filter(batch => batch.state === state);
+  // Create array of contract calls for all batches
+  const contracts = useMemo(() => {
+    if (!nextBatchId || nextBatchId === 0) return [];
+
+    return Array.from({ length: nextBatchId }, (_, i) => ({
+      address: CONTRACT_CONFIG.address,
+      abi: CONTRACT_CONFIG.abi,
+      functionName: 'getBatch' as const,
+      args: [i],
+    }));
+  }, [nextBatchId]);
+
+  const { data: batchesData, isLoading: batchesLoading, error, refetch } = useReadContracts({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contracts: contracts as any,
+    query: {
+      enabled: contracts.length > 0,
+    },
+  });
+
+  // Process and filter batches
+  const batches = useMemo(() => {
+    if (!batchesData || !state) return [];
+
+    return batchesData
+      .map((result, index) => {
+        if (result.status !== 'success' || !result.result) return null;
+
+        const batchArray = result.result as readonly [bigint, string, string, string, bigint, bigint, string, number, string, bigint, string, string, boolean];
+
+        // Check if batch exists before processing dates
+        if (!batchArray[12]) return null;
+
+        const harvestTimestamp = Number(batchArray[5]);
+        const roastTimestamp = Number(batchArray[9]);
+
+        return {
+          id: index,
+          farmName: batchArray[1],
+          farmLocation: batchArray[2],
+          coffeeVariety: batchArray[3],
+          quantity: Number(batchArray[4]),
+          harvestDate: harvestTimestamp > 0 ? new Date(harvestTimestamp * 1000).toISOString().split('T')[0] : '',
+          farmer: batchArray[6],
+          state: BatchStateNames[batchArray[7] as keyof typeof BatchStateNames],
+          roasterName: batchArray[8],
+          roastDate: roastTimestamp > 0 ? new Date(roastTimestamp * 1000).toISOString().split('T')[0] : '',
+          roastProfile: batchArray[10],
+          qrCode: batchArray[11],
+          exists: batchArray[12]
+        };
+      })
+      .filter((batch): batch is NonNullable<typeof batch> =>
+        batch !== null &&
+        batch.exists &&
+        batch.state === state
+      );
+  }, [batchesData, state]);
 
   return {
-    data: filteredData,
-    isLoading: idsLoading || batches.isLoading,
-    error: batches.error
+    data: batches,
+    isLoading: countLoading || batchesLoading,
+    error,
+    refetch
   };
 }

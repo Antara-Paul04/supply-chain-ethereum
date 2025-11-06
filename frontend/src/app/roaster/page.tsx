@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useContractWrite, useGetBatchesByState } from '@/hooks/useContract';
 import { getTransactionUrl } from '@/utils/explorer';
@@ -13,13 +13,23 @@ export default function RoasterDashboard() {
   const { address } = useAccount();
   const chainId = useChainId();
   const { writeAsync, isPending, isConfirming, isSuccess } = useContractWrite();
-  const { data: shippedBatches, isLoading: batchesLoading } = useGetBatchesByState('Shipped');
+  const { data: shippedBatches, isLoading: batchesLoading, refetch } = useGetBatchesByState('Shipped');
   const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
   const [roastData, setRoastData] = useState({
     roasterName: '',
     roastProfile: ''
   });
   const [qrCodeData, setQrCodeData] = useState<string>('');
+
+  // Refetch batches when transaction succeeds
+  useEffect(() => {
+    if (isSuccess) {
+      // Wait a bit for the blockchain to update
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    }
+  }, [isSuccess]);
 
   const handleRoast = async (e: React.FormEvent) => {
     e.preventDefault();

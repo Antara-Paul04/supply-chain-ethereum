@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useContractWrite, useGetFarmerBatches } from '@/hooks/useContract';
+import { useContractWrite, useGetFarmerBatches, useGetNextBatchId } from '@/hooks/useContract';
 import { getTransactionUrl } from '@/utils/explorer';
 import Link from 'next/link';
 import { useAccount, useChainId } from 'wagmi';
@@ -12,13 +12,24 @@ export default function FarmerDashboard() {
   const { address } = useAccount();
   const chainId = useChainId();
   const { writeAsync, isPending, isConfirming, isSuccess, hash } = useContractWrite();
-  const { data: farmerBatches, isLoading: batchesLoading } = useGetFarmerBatches(address);
+  const { data: farmerBatches, isLoading: batchesLoading, refetch } = useGetFarmerBatches(address);
+  const { data: nextBatchId } = useGetNextBatchId();
   const [formData, setFormData] = useState({
     farmName: '',
     farmLocation: '',
     coffeeVariety: '',
     quantity: ''
   });
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Farmer Dashboard Debug:', {
+      address,
+      nextBatchId,
+      farmerBatches,
+      batchesLoading
+    });
+  }, [address, nextBatchId, farmerBatches, batchesLoading]);
 
   // Pre-fill form with user's registration data
   useEffect(() => {
@@ -30,6 +41,16 @@ export default function FarmerDashboard() {
       }));
     }
   }, [user]);
+
+  // Refetch batches when transaction succeeds
+  useEffect(() => {
+    if (isSuccess) {
+      // Wait a bit for the blockchain to update
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    }
+  }, [isSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +243,15 @@ export default function FarmerDashboard() {
               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
                 {batchesLoading ? '...' : `${farmerBatches.length} batch${farmerBatches.length !== 1 ? 'es' : ''}`}
               </span>
+            </div>
+
+            {/* Debug Info */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
+              <p><strong>Debug Info:</strong></p>
+              <p>Total batches in contract: {nextBatchId || 0}</p>
+              <p>Your address: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
+              <p>Filtered batches for you: {farmerBatches.length}</p>
+              <p>Loading: {batchesLoading ? 'Yes' : 'No'}</p>
             </div>
 
             {batchesLoading ? (

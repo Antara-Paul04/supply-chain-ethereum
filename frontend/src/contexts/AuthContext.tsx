@@ -20,6 +20,7 @@ type User = {
 type AuthContextType = {
   user: User | null;
   login: (email: string, role: UserRole, name: string, location?: string) => Promise<void>;
+  loginExisting: (emailOrAddress: string) => Promise<boolean>;
   logout: () => Promise<void>;
   isLoading: boolean;
   hasAccess: (requiredRole: UserRole) => boolean;
@@ -132,6 +133,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   };
 
+  const loginExisting = async (emailOrAddress: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const isWalletAddress = emailOrAddress.startsWith('0x');
+
+      if (isWalletAddress && address) {
+        // Wallet-based login - check if already registered
+        if (contractUser && contractUser.isRegistered) {
+          // User data will be set by the useEffect above
+          setIsLoading(false);
+          return true;
+        }
+        setIsLoading(false);
+        return false; // Not registered
+      } else if (magic) {
+        // Email-based login with Magic Link
+        await magic.auth.loginWithMagicLink({ email: emailOrAddress });
+        const isLoggedIn = await magic.user.isLoggedIn();
+
+        if (isLoggedIn) {
+          const userMetadata = await magic.user.getInfo();
+          const userAddress = userMetadata.publicAddress || '';
+
+          // Manually fetch user data from contract using ethers
+          // We need to check if the user is registered
+          // For now, we'll use a simple fetch approach via the contract
+          const response = await fetch(`/api/checkUser?address=${userAddress}`);
+          if (response.ok) {
+            const userData = await response.json();
+            if (userData.isRegistered) {
+              setUser({
+                email: emailOrAddress,
+                address: userAddress,
+                role: userData.role.toLowerCase() as UserRole,
+                name: userData.name,
+                location: userData.location,
+                authMethod: 'magic'
+              });
+              setIsLoading(false);
+              return true;
+            }
+          }
+        }
+        setIsLoading(false);
+        return false; // Not registered
+      }
+    } catch (error) {
+      console.error('Login existing failed:', error);
+      setIsLoading(false);
+      return false;
+    }
+    setIsLoading(false);
+    return false;
+  };
+
   const logout = async () => {
     if (user?.authMethod === 'magic' && magic) {
       await magic.user.logout();
@@ -148,7 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, hasAccess }}>
+    <AuthContext.Provider value={{ user, login, loginExisting, logout, isLoading, hasAccess }}>
       {children}
     </AuthContext.Provider>
   );
